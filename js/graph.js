@@ -69,6 +69,8 @@ class GraphRenderer {
       idx: i,
       weight: Math.sqrt(repo.stars / maxStars),
       rgb: this.palette[repo.category] || [255, 255, 255],
+      // Natural variation in brightness, nudged up for popular repos
+      bright: Math.min(1, 0.5 + this._hash(repo.id + '*') * 0.35 + Math.sqrt(repo.stars / maxStars) * 0.5),
       alpha: 0.85,
       x: 0,
       y: 0,
@@ -344,18 +346,23 @@ class GraphRenderer {
     });
     this.sprites._default = this.sprites[Object.keys(this.sprites)[0]];
 
-    // One shared dewdrop halo: soft, neutral, small
-    const dew = document.createElement('canvas');
-    dew.width = dew.height = 64;
-    const dx = dew.getContext('2d');
-    const grad = dx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(240,244,255,0.42)');
-    grad.addColorStop(0.25, 'rgba(240,244,255,0.10)');
-    grad.addColorStop(1, 'rgba(240,244,255,0)');
-    dx.fillStyle = grad;
-    dx.fillRect(0, 0, 64, 64);
-    this.dew = dew;
-    if (window.createImageBitmap) createImageBitmap(dew).then(bmp => { this.dew = bmp; this.dirty = true; });
+    // Glow sprites: a gaussian-like falloff, mostly white with a whisper of the niche colour.
+    // Drawn additively, so clusters brighten naturally where light overlaps.
+    Object.entries(this.palette).forEach(([id, [r, g, b]]) => {
+      const tint = (c, base) => Math.round(c * 0.22 + base * 0.78);
+      const cr = tint(r, 225), cg = tint(g, 232), cb = tint(b, 255);
+      const glow = document.createElement('canvas');
+      glow.width = glow.height = 64;
+      const gx = glow.getContext('2d');
+      const grad = gx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      [[0, 0.55], [0.08, 0.38], [0.2, 0.16], [0.4, 0.05], [0.7, 0.012], [1, 0]].forEach(([t, a]) => {
+        grad.addColorStop(t, `rgba(${cr},${cg},${cb},${a})`);
+      });
+      gx.fillStyle = grad;
+      gx.fillRect(0, 0, 64, 64);
+      this.sprites[id].glow = glow;
+      if (window.createImageBitmap) createImageBitmap(glow).then(bmp => { this.sprites[id].glow = bmp; this.dirty = true; });
+    });
   }
 
   // ── Viewport ──────────────────────────────────────────
@@ -372,7 +379,7 @@ class GraphRenderer {
     this.dirty = true;
   }
 
-  // Plain black backdrop; the searchlight sits just below the bottom edge
+  // Plain black backdrop
   _buildSky() {
     this.bg = document.createElement('canvas');
     this.bg.width = this.canvas.width;
@@ -380,8 +387,6 @@ class GraphRenderer {
     const b = this.bg.getContext('2d');
     b.fillStyle = '#000000';
     b.fillRect(0, 0, this.bg.width, this.bg.height);
-    this.litClouds = null;
-    this.lamp = { x: this.W * 0.66, y: this.H + 12 };
   }
 
   _viewCenter() {
@@ -554,7 +559,7 @@ class GraphRenderer {
 
   _screenRadius(n) {
     const zoom = Math.pow(this.cam.s / this.fitScale, 0.5);
-    return (1.4 + n.weight * 3) * zoom;
+    return (0.8 + n.weight * 2.4) * zoom;
   }
 
   _hit(px, py) {
@@ -668,7 +673,7 @@ class GraphRenderer {
     ctx.drawImage(this.bg, 0, 0);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
-    this._drawSignal(ctx);
+    this._drawBackdrop(ctx);
     this._drawEdges(ctx);
     this._drawNodes(ctx);
     this._drawLabels(ctx);
@@ -678,88 +683,32 @@ class GraphRenderer {
     return [wx * this.cam.s + this.cam.x, wy * this.cam.s + this.cam.y];
   }
 
-  _drawSignal(ctx) {
+  _drawBackdrop(ctx) {
     const { s, x: ox, y: oy } = this.cam;
     const dpr = this.dpr;
     const sig = this.signal;
-    const dim = this._E ? 0.7 : 1;
+    const dim = this._E ? 0.6 : 1;
     const cx = ox + sig.cx * s, cy = oy + sig.cy * s;
     const rx = sig.rx * s, ry = sig.ry * s;
 
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-
-    // Searchlight beam from the rooftop lamp to the cloud deck
-    const L = this.lamp;
-    const dx = cx - L.x, dy = cy - L.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const px = -dy / len, py = dx / len;
-    const spread = Math.max(rx, ry) * 0.86;
-    const beam = ctx.createLinearGradient(L.x, L.y, cx, cy);
-    beam.addColorStop(0, `rgba(235,240,255,${0.26 * dim})`);
-    beam.addColorStop(0.5, `rgba(235,240,255,${0.07 * dim})`);
-    beam.addColorStop(1, `rgba(235,240,255,${0.03 * dim})`);
-    ctx.fillStyle = beam;
-    for (const k of [1, 0.55]) {
-      ctx.beginPath();
-      ctx.moveTo(L.x - px * 5 * k, L.y - py * 5 * k);
-      ctx.lineTo(cx - px * spread * k, cy - py * spread * k);
-      ctx.lineTo(cx + px * spread * k, cy + py * spread * k);
-      ctx.lineTo(L.x + px * 5 * k, L.y + py * 5 * k);
-      ctx.closePath();
-      ctx.fill();
-    }
-    // Lamp flare
-    const flare = ctx.createRadialGradient(L.x, L.y, 0, L.x, L.y, 26);
-    flare.addColorStop(0, 'rgba(245,248,255,0.9)');
-    flare.addColorStop(1, 'rgba(245,248,255,0)');
-    ctx.fillStyle = flare;
-    ctx.fillRect(L.x - 26, L.y - 26, 52, 52);
-
-    // Disc of light on the clouds
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.scale(1, ry / rx);
-    const disc = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
-    disc.addColorStop(0, `rgba(235,240,250,${0.07 * dim})`);
-    disc.addColorStop(0.72, `rgba(230,236,248,${0.1 * dim})`);
-    disc.addColorStop(0.9, `rgba(225,232,245,${0.13 * dim})`);
-    disc.addColorStop(1, 'rgba(225,232,245,0)');
-    ctx.fillStyle = disc;
-    ctx.beginPath();
-    ctx.arc(0, 0, rx, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Clouds light up only inside the disc
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx * 0.98, ry * 0.98, 0, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.globalAlpha = 0.14 * dim;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (this.litClouds) ctx.drawImage(this.litClouds, 0, 0);
-    ctx.restore();
-    ctx.restore();
-
-    // The emblem: a dark bat cut out of the light
+    // The emblem: a quiet silhouette at the centre of the network
     ctx.save();
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
-    ctx.fillStyle = 'rgba(4,4,7,0.95)';
+    ctx.fillStyle = 'rgba(255,255,255,0.025)';
     ctx.fill(this.batPath);
-    ctx.lineWidth = 1.2 / s;
-    ctx.strokeStyle = `rgba(230,236,248,${0.35 * dim})`;
+    ctx.lineWidth = 1 / s;
+    ctx.strokeStyle = `rgba(220,228,245,${0.28 * dim})`;
     ctx.stroke(this.batPath);
     ctx.restore();
 
-    // Niche names around the rim of the light, nudged apart so they never collide
+    // Niche names around the network, nudged apart so they never collide
     const focusCats = this._E ? new Set([...this._E].map(id => this.nodeById.get(id)?.category)) : null;
     ctx.font = '500 8.5px Inter, -apple-system, sans-serif';
     if ('letterSpacing' in ctx) ctx.letterSpacing = '1.6px';
     const labels = this.categories.map(cat => {
       const a = this.catAngle[cat.id];
       const ca = Math.cos(a), sa = Math.sin(a);
-      return { cat, side: ca >= 0 ? 1 : -1, x: cx + ca * rx * 1.04 + ca * 8, y: cy + sa * ry * 1.06 + sa * 6 };
+      return { cat, side: ca >= 0 ? 1 : -1, x: cx + ca * rx * 1.02 + ca * 8, y: cy + sa * ry * 1.04 + sa * 6 };
     });
     [1, -1].forEach(side => {
       const list = labels.filter(l => l.side === side).sort((p, q) => p.y - q.y);
@@ -771,7 +720,7 @@ class GraphRenderer {
     labels.forEach(({ cat, side, x, y }) => {
       const on = focusCats && focusCats.has(cat.id);
       ctx.textAlign = side > 0 ? 'left' : 'right';
-      ctx.fillStyle = on ? this.sprites[cat.id].accent : `rgba(228,232,240,${focusCats ? 0.2 : 0.5})`;
+      ctx.fillStyle = on ? this.sprites[cat.id].accent : `rgba(210,216,228,${focusCats ? 0.18 : 0.42})`;
       ctx.fillText(cat.name.toUpperCase(), x, y);
     });
     if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
@@ -796,22 +745,25 @@ class GraphRenderer {
       ? (e.s.id === center || e.t.id === center)
       : (!this.path && E && E.has(e.s.id) && E.has(e.t.id));
 
+    ctx.save();
+    // Additive: where many threads cross, the network glows a little brighter
+    ctx.globalCompositeOperation = 'lighter';
     ctx.beginPath();
     for (const e of this.edges) {
       if (isStrong(e)) { strong.push(e); continue; }
       this._curve(ctx, e.s, e.t);
     }
-    ctx.strokeStyle = `rgba(225,232,245,${E ? 0.04 : 0.14})`;
-    ctx.lineWidth = 0.45;
+    ctx.strokeStyle = `rgba(150,170,220,${E ? 0.025 : 0.075})`;
+    ctx.lineWidth = 0.6;
     ctx.stroke();
 
-    ctx.lineWidth = 0.9;
+    ctx.lineWidth = 1;
     for (const e of strong) {
       ctx.beginPath();
       this._curve(ctx, e.s, e.t);
       ctx.setLineDash(e.type === 'alternative-to' ? [3, 4] : e.type === 'depends-on' ? [1, 3] : []);
       ctx.strokeStyle = (this.sprites[e.s.category] || this.sprites._default).accent;
-      ctx.globalAlpha = 0.85;
+      ctx.globalAlpha = 0.7;
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
@@ -831,11 +783,13 @@ class GraphRenderer {
       ctx.setLineDash([]);
       ctx.lineDashOffset = 0;
     }
+    ctx.restore();
   }
 
   _drawNodes(ctx) {
-    const pad = 40;
+    const pad = 60;
     const W = this.W, H = this.H;
+    const E = this._E;
     const visible = [];
     for (const n of this.nodes) {
       const [x, y] = this._toScreen(n.x, n.y);
@@ -844,71 +798,63 @@ class GraphRenderer {
       visible.push(n);
     }
 
-    // Dewdrop halo on the larger repos only
-    const dew = this.dew;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Soft light around every node; overlapping halos add up like real light
     for (const n of visible) {
-      if (n.alpha < 0.3 || n.weight < 0.3) continue;
-      const g = n.rs * 2.6;
-      ctx.globalAlpha = n.alpha * 0.45;
-      ctx.drawImage(dew, n.sx - g, n.sy - g, g * 2, g * 2);
+      const a = n.alpha * n.bright;
+      if (a < 0.04) continue;
+      const big = n.id === this.hoverId || n.id === this.selectedId;
+      const g = n.rs * (big ? 10 : 5.5 + n.weight * 6);
+      ctx.globalAlpha = Math.min(1, a * (big ? 1.3 : 1.0));
+      ctx.drawImage((this.sprites[n.category] || this.sprites._default).glow, n.sx - g, n.sy - g, g * 2, g * 2);
     }
 
-    // Dark ring under every point so it reads against the lit clouds
-    ctx.fillStyle = '#000000';
-    ctx.globalAlpha = 0.75;
-    ctx.beginPath();
-    for (const n of visible) {
-      if (n.alpha < 0.3) continue;
-      const c = n.rs + 1.4;
-      ctx.moveTo(n.sx + c, n.sy);
-      ctx.arc(n.sx, n.sy, c, 0, Math.PI * 2);
-    }
-    ctx.fill();
-
-    // Points: silver with a faint niche tint; emphasised nodes take their accent colour
-    const E = this._E;
+    // Small cores; emphasised nodes take their niche accent
     const buckets = new Map();
     for (const n of visible) {
       const accent = E && E.has(n.id);
-      const a = Math.round(Math.min(1, n.alpha + 0.1) * 10) / 10;
+      const a = Math.round(Math.min(1, n.alpha * n.bright) * 10) / 10;
+      if (a <= 0) continue;
       const key = n.category + '|' + a + '|' + (accent ? 1 : 0);
       if (!buckets.has(key)) buckets.set(key, { cat: n.category, a, accent, list: [] });
       buckets.get(key).list.push(n);
     }
     for (const { cat, a, accent, list } of buckets.values()) {
       const sp = this.sprites[cat] || this.sprites._default;
-      ctx.globalAlpha = a;
+      ctx.globalAlpha = a * 0.85;
       ctx.fillStyle = accent ? sp.accent : sp.fill;
       ctx.beginPath();
       for (const n of list) {
-        const c = n.rs;
+        const c = Math.max(0.6, n.rs * 0.75);
         ctx.moveTo(n.sx + c, n.sy);
         ctx.arc(n.sx, n.sy, c, 0, Math.PI * 2);
       }
       ctx.fill();
     }
 
-    // Specular centre on bigger drops
-    ctx.globalAlpha = 0.95;
+    // Hot white centre on the brighter nodes
+    ctx.globalAlpha = 0.9;
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     for (const n of visible) {
-      if (n.alpha < 0.5 || n.rs < 2.2) continue;
-      const c = Math.max(0.6, n.rs * 0.32);
+      if (n.alpha * n.bright < 0.55 || n.rs < 1.6) continue;
+      const c = Math.max(0.5, n.rs * 0.3);
       ctx.moveTo(n.sx + c, n.sy);
       ctx.arc(n.sx, n.sy, c, 0, Math.PI * 2);
     }
     ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.restore();
 
     // Hover reticle
-    if (this.hoverId) this._ring(ctx, this.nodeById.get(this.hoverId), 0.8, 0);
+    if (this.hoverId) this._ring(ctx, this.nodeById.get(this.hoverId), 0.7, 0);
     // Selected: steady ring + soft pulse
     if (this.selectedId) {
       const n = this.nodeById.get(this.selectedId);
-      this._ring(ctx, n, 1, 0);
+      this._ring(ctx, n, 0.9, 0);
       const p = (this.time * 0.6) % 1;
-      this._ring(ctx, n, 0.45 * (1 - p), 16 * p);
+      this._ring(ctx, n, 0.4 * (1 - p), 16 * p);
     }
   }
 
