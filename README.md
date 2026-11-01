@@ -2,6 +2,8 @@
 
 **A Bat-Signal map of 1,450+ of the most useful open-source repositories, grouped into 27 niches and searchable by what you want to build.**
 
+**Live demo: https://neverfinished005.github.io/repoverse/**
+
 Instead of digging through dozens of awesome-lists, type what you need ("smart contract testing", "redact PII", "video generation", "self-hosted CRM") and RepoVerse lights up the right repos, shows how they connect, and links you straight to GitHub.
 
 ![RepoVerse screenshot](docs/screenshot.jpg)
@@ -58,6 +60,8 @@ npx serve -l 8089 .
 ```
 
 Open **http://localhost:8089** in your browser.
+
+**Live demo:** https://neverfinished005.github.io/repoverse/
 
 ### Controls
 

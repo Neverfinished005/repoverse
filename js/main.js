@@ -524,11 +524,6 @@
       navigator.clipboard.writeText(output.textContent).then(() => flash(e.target, 'Copied!'));
     });
 
-    document.getElementById('btn-copy-mcp-server-config').addEventListener('click', e => {
-      const conf = { mcpServers: { repoverse: { command: 'npx', args: ['-y', 'repoverse-mcp-server'] } } };
-      navigator.clipboard.writeText(JSON.stringify(conf, null, 2)).then(() => flash(e.target, 'Copied!'));
-    });
-
     document.getElementById('btn-export-mcp-json').addEventListener('click', () => {
       const blob = new Blob([JSON.stringify({ categories: CATEGORIES, repos: REPOS, relationships: RELATIONSHIPS }, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
