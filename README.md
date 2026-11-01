@@ -23,6 +23,7 @@ Instead of digging through dozens of awesome-lists, type what you need ("smart c
 - **Repo details.** Click a point for stars, language, license, year, use cases, tags, connected repos, a GitHub link and a copy-ready `git clone` command.
 - **Trace a path** between any two repos (shortest chain through the graph).
 - **Blueprints:** ready-made stacks highlighted on the map — Local AI Agent, Ethereum dApp, LLM Data-Leak Guard, Self-Hosted Business Suite, DevSecOps Pipeline and more.
+- **Ambient score:** an original dark orchestral loop generated live in the browser (Web Audio API, no audio files). It fades in after your first click or key press — browsers block sound before that. Press `M` to mute.
 - **MCP console:** an in-browser demo of how an AI agent could query the graph (search, details, path tracing, JSON export).
 
 ### How to read the map
@@ -73,6 +74,7 @@ Open **http://localhost:8089** in your browser.
 | Zoom | Scroll wheel, trackpad pinch, touch pinch, or double-click |
 | Open a repo | Click a point |
 | Close / step back | `Esc` |
+| Mute / unmute music | `M` |
 
 ---
 
@@ -113,7 +115,8 @@ repoverse/
 │   ├── catalog.js             # AUTO-GENERATED extended catalog (live GitHub data)
 │   ├── search.js              # Intent search, synonyms, shortest path, MCP demo tools
 │   ├── graph.js               # Canvas renderer: Bat-Signal scene, layout, camera, hit testing
-│   └── main.js                # UI controller: search, niche browser, drawer, modals
+│   ├── main.js                # UI controller: search, niche browser, drawer, modals
+│   └── ambient.js             # Procedural background score (Web Audio API)
 ├── scripts/
 │   ├── seed.mjs               # Repo seed list, batch 1
 │   ├── seed-more.mjs          # Repo seed list, batch 2
@@ -133,6 +136,7 @@ repoverse/
 
 - Repository metadata (stars, descriptions, languages, licenses) comes from the GitHub API at build time; star counts are a snapshot, not live.
 - The bat emblem is an original drawing made for this project. Batman and the Bat-Signal are trademarks of DC Comics; RepoVerse is an unofficial fan-styled project and is not affiliated with or endorsed by DC or Warner Bros.
+- The background music is an original composition generated in code; it does not use any film soundtrack.
 - Quote: "Why so serious?" — The Joker, *The Dark Knight* (2008).
 - Every listed project belongs to its respective authors under its own license.
 
