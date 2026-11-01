@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RepoVerse — Atlas of Open Source Software</title>
+  <meta name="description" content="Spider-web atlas of the most important open-source repositories, grouped by niche and searchable by what you want to build.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=12">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬛</text></svg>">
+</head>
+<body>
+
+  <!-- ── Full-screen graph ───────────────────────────────────────── -->
+  <main id="canvas-container">
+    <canvas id="graph-canvas"></canvas>
+  </main>
+
+  <!-- ── Search: the only control visible until a repo is picked ── -->
+  <div id="search-shell">
+    <div class="search-bar">
+      <span class="search-icon">⌕</span>
+      <input
+        type="text"
+        id="hud-search"
+        class="search-input"
+        placeholder="What do you want to build? e.g. 'smart contract testing'"
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <button class="search-clear hidden" id="btn-clear-search" title="Clear (Esc)">&times;</button>
+      <span class="search-key" id="search-key-hint">/</span>
+    </div>
+    <div id="hud-dropdown" class="search-dropdown hidden"></div>
+  </div>
+
+  <!-- ── Active route strip (after Trace / Blueprint) ─────────────── -->
+  <div id="active-path-strip" class="minimal-path-strip hidden">
+    <span class="path-strip-tag">ROUTE</span>
+    <span id="path-strip-text" class="path-strip-chain"></span>
+    <button class="path-strip-close" id="btn-close-path" title="Clear path">&times;</button>
+  </div>
+
+  <!-- ── Repo drawer (slides in on select) ────────────────────────── -->
+  <aside id="editorial-drawer">
+    <button class="drawer-close" id="btn-close-drawer" title="Close (Esc)">&times;</button>
+    <div id="drawer-content"></div>
+    <div class="drawer-tools">
+      <button class="btn-minimal" id="btn-trace">Trace path</button>
+      <button class="btn-minimal" id="btn-blueprints">Blueprints</button>
+      <button class="btn-minimal" id="btn-mcp">MCP</button>
+      <button class="btn-minimal" id="btn-reset-view">Reset view</button>
+    </div>
+  </aside>
+
+  <!-- ── Signature corner ──────────────────────────────────────── -->
+  <footer id="signature">
+    <blockquote class="sig-quote">
+      “Why so serious?”
+      <cite>— The Joker, <i>The Dark Knight</i> (2008)</cite>
+    </blockquote>
+    <div class="sig-maker">
+      <svg class="sig-bat" viewBox="0 10 64 32" aria-hidden="true"><path id="sig-bat-path" fill="currentColor"/></svg>
+      <span>Made by <b>Batman</b></span>
+    </div>
+  </footer>
+
+  <!-- ── Hover tooltip ─────────────────────────────────────────── -->
+  <div id="minimal-tooltip" class="minimal-tooltip"></div>
+
+  <!-- ── Trace Path Modal ──────────────────────────────────────── -->
+  <div id="modal-trace" class="editorial-modal-backdrop hidden">
+    <div class="editorial-modal-panel">
+      <div class="modal-title-row">
+        <h3 class="modal-header-title">Shortest Path Tracer</h3>
+        <button class="modal-close-icon" data-close="modal-trace">&times;</button>
+      </div>
+      <p class="modal-subtext">
+        Find the shortest integration chain between any two repositories in the graph.
+      </p>
+
+      <div style="display:grid; grid-template-columns:1fr auto 1fr; gap:10px; align-items:center; margin-bottom:16px;">
+        <div>
+          <label class="field-label">Source</label>
+          <select id="trace-source" class="modal-select"></select>
+        </div>
+        <div style="padding-top:16px;">
+          <button id="btn-swap-trace" class="btn-minimal" style="padding:6px 8px;">⇄</button>
+        </div>
+        <div>
+          <label class="field-label">Target</label>
+          <select id="trace-target" class="modal-select"></select>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <button class="btn-minimal btn-primary" id="btn-run-trace">Calculate Path →</button>
+      </div>
+
+      <div id="trace-result-box" class="hidden" style="border-top:1px solid var(--border-hairline); padding-top:14px;">
+        <div id="trace-summary" style="font-family:var(--font-mono); font-size:11.5px; color:var(--c-amber); margin-bottom:12px;"></div>
+        <div id="trace-steps-list" style="display:flex; flex-direction:column; gap:6px; margin-bottom:16px;"></div>
+        <button class="btn-minimal" id="btn-apply-trace">Show on graph</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Blueprints Modal ──────────────────────────────────────── -->
+  <div id="modal-blueprints" class="editorial-modal-backdrop hidden">
+    <div class="editorial-modal-panel modal-wide">
+      <div class="modal-title-row">
+        <h3 class="modal-header-title">Architecture Blueprints</h3>
+        <button class="modal-close-icon" data-close="modal-blueprints">&times;</button>
+      </div>
+      <p class="modal-subtext">
+        Battle-tested stacks. Pick one to light up its whole pipeline on the graph.
+      </p>
+
+      <div id="blueprints-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:12px; margin-bottom:16px;"></div>
+
+      <div id="blueprint-detail" class="hidden" style="border-top:1px solid var(--border-hairline); padding-top:16px;">
+        <button class="btn-minimal" id="btn-back-blueprints" style="margin-bottom:10px; font-size:10px;">← Back to All</button>
+        <h4 id="blueprint-title" style="font-size:15px; color:var(--text-title); margin-bottom:4px;"></h4>
+        <p id="blueprint-desc" style="font-size:11.5px; color:var(--text-dim); margin-bottom:14px;"></p>
+        <div id="blueprint-steps" style="display:flex; flex-direction:column; gap:6px; margin-bottom:16px;"></div>
+        <button class="btn-minimal btn-primary" id="btn-apply-blueprint">Show on graph</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MCP Modal ─────────────────────────────────────────────── -->
+  <div id="modal-mcp-panel" class="editorial-modal-backdrop hidden">
+    <div class="editorial-modal-panel modal-wide">
+      <div class="modal-title-row">
+        <h3 class="modal-header-title">Model Context Protocol (MCP) Agent Console</h3>
+        <button class="modal-close-icon" data-close="modal-mcp-panel">&times;</button>
+      </div>
+      <p class="modal-subtext">
+        Interface for AI agents (Claude Desktop, Cursor, Antigravity) to query this repository graph as external memory.
+      </p>
+
+      <div style="display:grid; grid-template-columns:1fr 1.2fr; gap:16px;">
+        <div>
+          <label class="field-label">MCP Tool</label>
+          <select id="mcp-select-tool" class="modal-select" style="margin-bottom:12px;">
+            <option value="search_repositories">search_repositories({ intent, query })</option>
+            <option value="get_repo_details">get_repo_details({ repo_id })</option>
+            <option value="trace_connection_path">trace_connection_path({ source, target })</option>
+            <option value="export_mcp_graph_schema">export_mcp_graph_schema()</option>
+          </select>
+
+          <div id="mcp-dynamic-inputs" style="margin-bottom:14px;"></div>
+
+          <button class="btn-minimal btn-primary" id="btn-execute-mcp" style="margin-bottom:16px;">Execute Tool Call →</button>
+
+          <div style="border-top:1px solid var(--border-hairline); padding-top:12px;">
+            <span class="field-label">Exports</span>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button class="btn-minimal" id="btn-copy-mcp-server-config" style="font-size:10px;">Copy MCP Config</button>
+              <button class="btn-minimal" id="btn-export-mcp-json" style="font-size:10px;">Export JSON</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-family:var(--font-mono); font-size:10px; color:var(--text-dim);">JSON-RPC Protocol Output</span>
+            <button class="btn-minimal" id="btn-copy-mcp-raw" style="font-size:9.5px; padding:2px 6px;">Copy</button>
+          </div>
+          <pre id="mcp-raw-output" style="background:#090a0d; border:1px solid var(--border-hairline); border-radius:3px; padding:12px; font-family:var(--font-mono); font-size:10.5px; color:#34d399; max-height:300px; overflow:auto;">// Ready for tool execution</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js?v=12"></script>
+  <script src="js/catalog.js?v=12"></script>
+  <script src="js/search.js?v=12"></script>
+  <script src="js/graph.js?v=12"></script>
+  <script src="js/main.js?v=12"></script>
+</body>
+</html>
